@@ -1,0 +1,45 @@
+#include <stdio.h>
+
+
+
+int main(){
+	
+	int a, b, ans;
+	char c;
+	
+	printf("enter sign:\n");
+	scanf("%c", &c);
+	
+	printf("enter first no:\n");
+	scanf("%d", &a);
+	
+	printf("enter second no:\n");
+	scanf("%d", &b);
+	
+	
+		if( c == '+'){
+			
+			printf("%d + %d = %d", a, b, a+b); 
+			
+		}
+		else if( c == '/'){
+			
+			printf("%d / %d = %d", a, b, a/b); 
+			
+		} 
+		else if( c == '*'){
+			
+			printf("%d * %d = %d", a, b, a*b); 
+			
+		} 
+		else{
+			
+			printf("%d - %d = %d", a, b, a-b); 
+			
+		} 
+		
+		
+		
+	return 0;
+	
+}
