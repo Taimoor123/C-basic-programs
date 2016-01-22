@@ -1,0 +1,607 @@
+//when parent and child write false then it not be written else if one is true then it will be write on child node too,,,,,
+
+//===================================
+//        All Global Functions 
+//===================================
+
+function isAuthenticatedUser(userid) {
+  return auth != null && auth.uid == userid;
+}
+
+function isAuthenticated() {
+    return auth != null;
+}
+
+//===================================
+// User Started Here
+//===================================
+//  User path
+//=================================== 
+
+path /users/{userid} is UserType {
+ write() { isAuthenticatedUser($userid) }
+ read() { isAuthenticatedUser($userid) }
+}
+
+
+  
+//===================================
+//  User Type
+//===================================
+
+type UserType {
+ "email"        : String ;
+ "firstName"    : NameLengthGreaterThanThree;
+ "lastName"     : NameLengthGreaterThanThree;
+ "date-created" : CurrentTimeStamp;
+ "status"       : StatusType;
+}
+
+type NameLengthGreaterThanThree extends String{
+     validate() { this >= 3 }
+}
+
+type CurrentTimeStamp extends Number{
+  validate() { this <= now }
+}
+
+type StatusType extends Number {
+  validate() { this == -1 || this == 0 || this == 1 }
+}
+
+
+//===================================
+// user-presence Started Here
+//===================================
+
+path /user-presence/{userid} is UserPresence {
+   read()     {     isAuthenticated()          }
+   create()   {  isAuthenticatedUser($userid)  }
+   update()   {  isAuthenticatedUser($userid)  }
+   
+   //---------------------------------------
+   //   path for connections/ConnectionID
+   //-------------------------------------
+   
+   /connections/{connectionID} is ConnectionIDStatus { }
+}
+
+type UserPresence {
+      "last-modified"   :  CurrentTimeStamp,
+      "defined-status"  :  Number                       // 1 = online, 2 = away, 3 = busy. if no connection that means it's offline    
+}
+
+type ConnectionIDStatus{
+      delete()   {  isAuthenticatedUser($userid) }
+      "type"     : Number,                               //  1 = mobile, 2 = tablet, 3 = web, 4 = iWatch , 5 = hololens  
+      "started"  : CurrentTimeStamp
+}
+
+//===================================
+//          Personal Setting 
+//===================================
+//      Path for Personal Setting
+//===================================
+
+
+path /users/{userid} is UserPersonalSetting {
+    read()   {     isAuthenticated()          }
+    update() {  isAuthenticatedUser($userid)  }
+
+}
+
+
+type UserPersonalSetting {
+
+    'contactNumber'   : ContactNumberLength,
+ 		'date-created'    : CurrentTimeStamp,
+ 		'desc'            : String,
+ 		'email'           : String,
+ 	  'firstName'       : NameLengthGreaterThanThree,
+ 		'lastName'        : NameLengthGreaterThanThree,
+ 		'profession'      : String,          
+ 		'profile-image'   : String,                                               //  ----------------------------------
+		'status'          : Number                                               // Discuss
+}                                                                           //--------------------- 
+
+
+
+type ContactNumberLength extends Number {
+  validate() {  
+    this.length >= 5  
+  }
+}
+
+
+//===================================
+// user-group-memberships Start Here
+//===================================
+
+path /user-group-memberships/{userid} {
+   read()     {      isAuthenticatedUser($userid)               }
+   validate() {  prior(root['user']['$userid']).val() != null   }
+}
+
+//sir we left the checking here
+
+
+path /user-group-memberships/{userid}/{groupid} is UserMemberShipType {
+
+ //read() { isGroupIdExist() && isCurrentUserGroupOwner() || isCurrentUserGroupAdmin() } 
+ 
+ create() {    authAdminForWriteOnce(this)           &&
+               isAuthenticatedUser($userid)     }
+ update() {
+                 isGroupIdExist()                    &&
+                 isCurrentUserGroupOwner()           ||
+                 isCurrentUserGroupAdmin()           ||
+                 userGroupMembershipsTypeShoudBeGreaterThanZero()
+                  }
+ }
+ 
+ type UserMemberShipType {
+   "membership-type" : MembershipValue,
+   "timestamp"       : CurrentTimeStamp
+ }
+ 
+ type MembershipValue extends Number {
+    validate() {                                                                               //1 owner ; 2 admin 3 member -1 blocked member 0 for ????
+    this.val() == -1 || this.val == 0 || this.val() == 1 || this.val() == 2 || this.val() == 3 }       // || this.val() == 4
+  }
+  
+function userGroupMembershipsTypeShoudBeGreaterThanZero() {
+    return prior(root['user-group-memberships']['$groupid']['auth.uid']['membership-type'].val() > 0)
+ }
+  
+ function isGroupIdExist() {
+    return prior(root['user-group-memberships']['auth.uid']['$groupid'].val() != null)
+ } 
+
+ 
+//function memberTypeShouldBeForWrite() {
+//return (prior(root['user-group-memberships']['auth.uid']['$groupid'].val() != null) &&
+//         prior(root['user-group-memberships']['auth.uid']['$groupid']['membership-type'].val()  == 1) || 
+//        prior(root['user-group-memberships']['auth.uid']['$groupid']['membership-type'].val() == 2 ))
+//}
+   
+
+function isAdminHimSelf (value) {
+    return   value.val() == 1
+}
+
+
+function authAdminForWriteOnce(that) {
+    return   isAdminHimSelf(that['membership-type'])              // && authForWriteOnce(that)
+} 
+
+
+function authOwnerAdminEdit(that) {
+    return  prior(root['user-group-memberships']) 
+}
+
+
+function isCurrentUserGroupOwner () {
+    return  prior(root['user-group-memberships']['auth.uid']['$groupid']['membership-type'].val() == 1)
+ }
+ 
+ 
+ function isCurrentUserGroupAdmin () {
+    return  prior(root['user-group-memberships']['auth.uid']['$groupid']['membership-type'].val() == 2)
+ }
+ 
+ 
+ //Coments
+ //-----------------------------------------------
+ //function authForWriteOnce(value){
+ //return (prior(value) == null && isAuthenticatedUser($userid))
+//} 
+  
+ //function memberTypeShouldBeForRead() {
+ // return  prior(root['user-group-memberships']['auth.uid']['$groupid']['membership-type'].val() == 1) || 
+ //     prior(root['user-group-memberships']['auth.uid']['$groupid']['membership-type'].val() == 2)
+ //}
+ //---------------------------------------
+ 
+ 
+//===================================
+// User-Group-Membership End
+//===================================
+
+//Group-member Start Here
+//===================================
+// Path for Group-member
+//===================================
+
+path /group-members/{groupid} {
+  read() { isGroupMembersIdExist() && groupMemberTypeShoudBeGreaterThanZero()  } // i think blockmember type is -1 so blockmembers cannot read the group for that we want member-shiptype should be greater than 0 
+} 
+
+path /group-members/{groupid}/{userid} is GroupMemberShipType {
+  read()   {  isAuthenticatedUser($userid) }
+  create() {  isAuthenticatedUser($userid)       &&
+              this['membership-type'].val() == 1       }
+  update() {  isGroupMembersIdExist()            ||
+              isCurrentUserGroupMembersOwner()   || 
+              isCurrentUserGroupMembersAdmin()         }
+}
+
+//===================================
+//type for Group-Member
+//===================================
+ type GroupMemberShipType {
+   "membership-type" : MembershipValue,
+   "timestamp"       : CurrentTimeStamp
+ }
+ 
+//===================================
+//function For Group-member
+//===================================
+ 
+function isGroupMembersIdExist() {
+  return prior(root['group-members']['$groupid']['auth.uid'] != null);
+}
+
+function groupMemberTypeShoudBeGreaterThanZero() {
+    return prior(root['group-members']['$groupid']['auth.uid']['membership-type'].val() > 0)
+ }
+ 
+function isCurrentUserGroupMembersOwner () {
+    return  prior(root['group-members']['$groupid']['auth.uid']['membership-type'].val() == 1 )
+ }
+ 
+ 
+ function isCurrentUserGroupMembersAdmin () {
+    return  prior(root['group-members']['$groupid']['auth.uid']['membership-type'].val() ==2 )
+ }
+/*
+ function groupMemberTypeShoudBe() {
+    return prior(root['group-members']['$groupid'][auth.uid].val() != null && 
+     root['group-members']['$groupid']['auth.uid']['membership-type'].val() == 1 || 
+     root['group-members']['$groupid']['auth.uid']['membership-type'].val() ==2 )
+ }*/
+
+//===================================
+//Group-member End Here
+//===================================
+  
+  
+    
+//===================================
+// Group Start Here
+//===================================
+//        path for  Groups
+//===================================
+ 
+ 
+ path /group/{groupid} is GroupInfo {
+  read()  {   isGroupIdExist()          && 
+              userGroupMembershipsTypeShoudBeGreaterThanZero() }
+  create() { isGroupMembersIdExist() &&
+            groupMemberTypeShoudBeGreaterThanZero() }
+            
+  update() { isGroupMembersIdExist() && isCurrentUserGroupMembersAdmin() ||
+              isCurrentUserGroupMembersOwner()
+   }
+  validate() { this.hasChildren(['privacy','members-checked-in']) }
+ 
+  //update() { }
+  
+   // path for /group/groupid/privacy
+  //--------------------------------------------
+  
+  /privacy is PrivacyType { }
+  
+   // path for /group/groupid/members-checked-in 
+  //--------------------------------------------------
+  
+  /members-checked-in is MembersCheckInInfo { }
+  
+  
+   // path for /group/groupid/members-checked-in/checked-in/$userid
+  //----------------------------------------------------------------
+  
+  /members-checked-in/checked-in/{userid} { 
+   validate() {  prior(root['users']['$userid'] != null) }
+   write()    {  isAuthenticatedUser($userid) &&
+                 isGroupMembersIdExist()   &&
+                 groupMemberTypeShoudBeGreaterThanZero() }
+  }
+}
+
+type GroupInfo {
+ 'title'            :  TitleLength,
+ 'desc'             :  String,
+ 'timestamp'        :  Number,
+ 'member-count'     :  MemberCount,
+ 'subgroup-count'   :  SubgroupCount,
+ 'address'          :  String,
+ 'phone'            :  Number,
+ 'timezone'         :  TimeZoneLength,
+ 'logo-image'       :  LogoImageRequirement
+}
+
+type TitleLength extends String {
+   validate() { this.length >= 3 && this.length <= 40 }
+ }
+
+ type MemberCount extends Number {
+   validate() {
+        this >= 1
+    }
+  }
+
+type SubgroupCount extends Number { 
+   validate() { 
+      this >= 0 
+     }
+}
+
+ type TimeZoneLength extends String {
+   validate() {
+     this.length >= 3 && this.length <= 100 
+    }
+  }
+type MembersCheckInInfo {
+   validate() {this.hasChildren(['checked-in']) }
+   count : Count
+}
+type Count extends Number {
+  validate() { this >= 0 }
+  write()    { isGroupMembersIdExist()() && groupMemberTypeShoudBeGreaterThanZero() }
+} 
+
+type PrivacyType {
+  invitationType : InvitationPrivacyType
+ 
+}
+ type InvitationPrivacyType extends Number { 
+  validate() { this == 1 || this == 2 || this == 3}
+ }
+ 
+type LogoImageRequirement {
+   validate() {
+    this['logo-image'].hasChildren(['url','id','bucket-name','source','mediaType']);
+   }
+} 
+ 
+ 
+ 
+ //===================================
+ //       Group Names
+ //===================================
+ 
+ path /groups-names {
+    read() { isAuthenticated() }
+    
+    
+    //Path for /groups-names/groupid
+    //---------------------
+                                      //-------------------------------create N update discussion-----------------------
+
+      /{groupid} is GroupsNameInfo {
+            
+          create() { isGroupMembersIdExist()            &&
+                     this['membership-type'].val() == 1 }
+                     
+          update() { isGroupMembersIdExist()            && 
+                     isCurrentUserGroupMembersOwner()   || 
+                     isCurrentUserGroupMembersAdmin() }
+      }
+ }
+ 
+ type GroupsNameInfo {
+      groupImgUrl  : String,
+ 		  ownerImgUrl  : String,
+ 		  title        : String
+ 
+ }
+
+ 
+ //====================================
+ //   Group Activity Streams
+ //====================================
+ 
+ path /group-activity-streams/{groupid} is GroupActivityStreamsInfo {
+        read()     {    isGroupMembersIdExist()    && 
+                     groupMemberTypeShoudBeGreaterThanZero() }
+                  
+        write()    { isGroupMembersIdExist()       && 
+                     groupMemberTypeShoudBeGreaterThanZero() }
+                  
+        validate() { prior(root['groups']['$groupid'].val != null)     }
+        
+        /{userid}/actor is UserIDActorInfo{ } 
+ 
+ }  
+ 
+type GroupActivityStreamsInfo {
+
+    'displayName' : String,
+    'language'    : String,
+    'object'      : ObjectInfo,
+    'published'   : CurrentTimeStamp,
+    'verb'        : String            //verb Under discussion------------------------
+} 
+ type UserIDActorInfo {
+    'displayName' : String,
+    'email'       : String,
+    'id'          : String,
+    'type'        : String      // type Under discussion------------------------
+    
+ }
+ 
+ type ObjectInfo {
+  'displayName' : String,
+  'id'          : String,
+  'type'        : String,      // type Under discussion------------------------
+  'url'         : String  
+  
+ }
+ 
+ 
+ 
+ 
+ //======================================
+ //         Edit Groups (teams)
+ //======================================
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+//===========================================================  22/1/16  ===================================================================== 
+ 
+/* 
+  // Old 
+ //---------------------------------------
+ path /groups/{groupid} is GroupsInfo {
+ read() {  isGroupIdExist()          && 
+           userGroupMembershipsTypeShoudBeGreaterThanZero() }
+ write() {  isGroupMembersIdExist() &&
+            groupMemberTypeShoudBeGreaterThanZero() }
+} 
+
+
+ path /groups/{groupid}/members-checked-in/count is Count {
+     write() { isGroupMembersGroupExist() && groupMemberTypeShoudBeGreaterThanZero() }
+ }
+
+ path /groups/{groupid}/members-checked-in/checked-in/{userid} { 
+   write() { isAuthenticatedUser($userid) && isGroupMembersGroupExist() && groupMemberTypeShoudBeGreaterThanZero() }
+   validate() { 
+    prior(root['users']['$userid'] != null)
+    }
+ }
+ 
+  //=========================================
+ //        Type For Groups
+//=========================================
+
+type GroupsInfo {
+  'title'              : TitleLength
+  'timestamp'          : CurrentTimeStamp,
+  'members-count'      : MemberCount,
+  'subgroups-count'    : SubgroupCount,
+  'timeZone'           :  TimeZoneLength,
+  'privacy'            :  InvitationTypeAndLogoImage
+  
+}
+
+type TitleLength extends String {
+   validate() { this.length >= 3 && this.length <= 40 }
+ }
+
+ type MemberCount extends Number {
+   validate() {
+        this >= 1
+    }
+  }
+
+type SubgroupCount extends Number { 
+   validate() { 
+      this >= 0 
+     }
+}
+
+ type TimeZoneLength extends String {
+   validate() {
+     this.length >= 3 && this.length <= 100 
+    }
+  }
+  
+ type Count extends Number { 
+   validate() { 
+    this >= 0
+   }
+ }
+
+type InvitationTypeAndLogoImage { 
+  'invitationType' : InvitationType,
+  'logo-image'     : ImageLogo
+
+}
+
+type InvitationType extends Number { 
+   validate() { 
+  this == 1 || this == 2 || this == 3
+   }
+ }
+ type ImageLogo {
+     validate() {
+    this['logo-image'].hasChildren(['url','id','bucket-name','source','mediaType']);
+   }
+  }
+  //=============================================
+ //     Funtion For Groups
+//=============================================
+  //function userGroupMembershipShouldBe() {
+ // return prior(root['user-group-memberships']['auth.uid']['$groupid']['membership-type'].val() > 0 )
+//}
+  //================================
+ //Group End Here
+//================================
+
+
+
+ //====================================
+ //   Group check in Current
+ //====================================
+ 
+ path /group-check-in-current/{groupid} {
+     read()     {    isGroupMembersIdExist()    && 
+                     groupMemberTypeShoudBeGreaterThanZero() }
+ 
+ }
+ 
+
+
+
+*/
